@@ -1680,7 +1680,7 @@ function shell(c, active, body, opts) {
   </header>
   <main class="main ${opts.wide ? 'wide' : ''}" id="main">${body}</main>
   ${c ? `<nav class="nav-bottom">${nav}</nav>` : ''}
-  <footer class="foot">Unofficial fan tool for the VP Milestone System (${esc(String(R.version).replace(/\s*\([^)]*\)/, ''))})${c ? ` · <span data-test="foot-meter">this campaign's meter: ${c.meter === 'glory' ? 'Glory Share' : 'real battle VP'}</span>` : ''}. Not endorsed by Games Workshop. Warhammer: The Old World is a trademark of Games Workshop Ltd. · <a href="https://theoldworldcommunity.com/" target="_blank" rel="noopener">The Old World Community</a></footer>`;
+  <footer class="foot">Unofficial fan tool for the VP Milestone System (${esc(String(R.version).replace(/\s*\([^)]*\)/, ''))})${c ? ` · <span data-test="foot-meter">this campaign's meter: ${c.meter === 'glory' ? 'Glory Share' : 'real battle VP'}</span>` : ''}. Not endorsed by Games Workshop. Warhammer: The Old World is a trademark of Games Workshop Ltd. · <a href="https://theoldworldcommunity.com/" target="_blank" rel="noopener">The Old World Community</a> · <a href="https://www.patreon.com/c/TheOldWorldCommunity" target="_blank" rel="noopener">Support us on Patreon</a></footer>`;
 }
 document.addEventListener('click', e => {
   if (e.target.closest('[data-act="settings"]')) { settingsModal(); return; }
