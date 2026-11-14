@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#0C0A08">
+<meta name="color-scheme" content="dark light">
 <meta name="description" content="The Road to Legend: a Victory Point Milestone campaign companion for Warhammer: The Old World. Unofficial fan tool.">
 <title>The Road to Legend · VP Milestone Campaign</title>
 <link rel="manifest" href="manifest.webmanifest">
@@ -1068,6 +1069,18 @@ body:has(.reveal) #toast-root,body:has(.theatre) #toast-root{visibility:hidden}
 .sheet .bc .wdl u{color:#560A0A;border:0;outline:1.6px solid #6E1010;outline-offset:1px;padding:0 2px;border-radius:50%;background:rgba(255,250,236,.85);font-weight:800}
 .sheet .bc .wdl{color:#2E2014}
 @media print{.sheet .bc .wdl u{color:#4A0808!important;outline-color:#5E0C0C!important;background:#FFFBEF!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}.sheet .bc .wdl{color:#2A1D12!important}}
+/* Android 15/16 edge-to-edge (viewport-fit=cover): keep content clear of display cutouts in landscape and of the gesture bar.
+   color-scheme: night declares dark, day is "only light", so Chrome's auto-dark / "Darken websites" never repaints either theme;
+   form controls keep their existing light rendering so nothing changes visually. */
+:root{color-scheme:dark}
+[data-theme='day']{color-scheme:only light}
+:root:not([data-theme='day']) :is(input,select,textarea){color-scheme:light}
+@media screen{.main{padding-left:max(var(--gutter),env(safe-area-inset-left));padding-right:max(var(--gutter),env(safe-area-inset-right))}
+  .foot{padding-left:max(16px,env(safe-area-inset-left));padding-right:max(16px,env(safe-area-inset-right))}}
+@media screen and (max-width:860px){.main{padding-left:max(14px,env(safe-area-inset-left));padding-right:max(14px,env(safe-area-inset-right))}}
+/* polish-review-3 C12: size bottom-nav items to their labels (CHRONICLE is the longest) so every word sits inside its item with a gap; type stays at the 13px floor */
+@media (max-width:440px){.nav-bottom{gap:0}.nav-bottom .nav-i{flex:1 1 auto;min-width:0;padding:6px 2px;font-size:13px;letter-spacing:0}.nav-bottom .nav-i span{white-space:nowrap;overflow:visible}}
+@media (max-width:340px){.nav-bottom .nav-i{flex:1 1 min-content}.nav-bottom .nav-i span{white-space:normal;text-align:center;line-height:1.1}}
 </style>
 </head>
 <body>
@@ -1616,6 +1629,8 @@ async function animateDie(wrapId, value) {
 /* ---------------- router & shell ---------------- */
 let CUR = null;   // current campaign object (live)
 function go(h) { if (location.hash === h) route(); else location.hash = h; }
+// render-time redirects replace the current history entry, so Android Back never bounces off them (no back trap)
+function redirect(h) { if (location.hash === h) route(); else location.replace(h); }
 function route() {
   const h = location.hash.replace(/^#/, '') || '/';
   const parts = h.split('/').filter(Boolean);
@@ -1623,7 +1638,7 @@ function route() {
   if (parts[0] === 'new') return renderSetup();
   if (parts[0] === 'codex' && !parts[1]) { CUR = null; return renderCodex(null); }
   if (parts[0] === 'c' && parts[1]) {
-    const c = Store.get(parts[1]); if (!c) { toast('That campaign was not found.', 'bad'); return go('#/'); }
+    const c = Store.get(parts[1]); if (!c) { toast('That campaign was not found.', 'bad'); return redirect('#/'); }
     CUR = migrate(c);
     const v = parts[2] || 'table';
     if (v === 'battle') return renderBattle(CUR);
@@ -1670,8 +1685,17 @@ document.addEventListener('click', e => {
   if (e.target.closest('[data-act="settings"]')) { settingsModal(); return; }
   const t = e.target.closest('[data-act="theme"]'); if (!t) return;
   const next = document.documentElement.dataset.theme === 'day' ? 'night' : 'day';
-  document.documentElement.dataset.theme = next; pref('theme', next); route();
+  document.documentElement.dataset.theme = next; pref('theme', next); syncThemeChrome(); route();
 });
+// Browser / Android system UI follows the in-app theme: theme-color (status bar, task switcher) matches the iron top bar,
+// color-scheme matches the page so native controls fit and Chrome's auto-dark never repaints the parchment theme.
+const THEME_CHROME = { night: { color: '#0C0A08', scheme: 'dark' }, day: { color: '#0C0A08', scheme: 'only light' } };
+function syncThemeChrome() {
+  const t = THEME_CHROME[document.documentElement.dataset.theme] || THEME_CHROME.night;
+  document.querySelectorAll('meta[name="theme-color"]').forEach(m => m.setAttribute('content', t.color));
+  const cs = document.querySelector('meta[name="color-scheme"]'); if (cs) cs.setAttribute('content', t.scheme);
+  document.documentElement.style.colorScheme = t.scheme;
+}
 // Pace line figures straight from data/pace_check.json (exact line, ruling 1), cross-checked against the engine formula.
 const HUMBLED_TXT = ((/“([^”]+)”/.exec(R.legend_humbled || '') || [])[1]) || 'Even legends bleed. On this field, your army was humbled, and the chroniclers add a dark footnote to a glorious tale.';
 function bolLoserItems(c, st, pid) {
@@ -1701,11 +1725,14 @@ function settingsModal() {
   const m = modal(`<h2 class="m-title">Settings</h2><div class="m-body">
     <div class="set-row"><h4>Ceremony</h4><div class="seg" role="radiogroup">${[['full', 'Full'], ['short', 'Short'], ['off', 'Off']].map(([k, l]) => `<button role="radio" aria-checked="${cur === k}" class="${cur === k ? 'on' : ''}" data-cer="${k}" data-test="cer-${k}">${l}</button>`).join('')}</div>
     <p class="small muted">Full plays the dice, meter and milestone ceremonies. Short is the reduced-motion version (quick fades, useful on tournament days). Off shows every result at once. Every ceremony can also be skipped with a tap.</p></div>
+    ${INSTALL_EVT && !isStandalone() ? `<div class="set-row" data-test="set-install"><h4>App</h4><button class="btn gilt" data-set-install="1" data-test="set-install-btn">${icon('M12 3v12M7 10l5 5 5-5M5 21h14', 20)} Install The Road to Legend</button>
+    <p class="small muted">Opens full screen from your home screen and works offline at the table.</p></div>` : ''}
     <div class="set-row"><h4>Theme</h4><div class="seg">${[['night', 'Night'], ['day', 'Day (parchment)']].map(([k, l]) => `<button class="${th === k ? 'on' : ''}" data-th2="${k}">${l}</button>`).join('')}</div></div>
     </div><div class="m-actions"><button class="btn gilt" data-close="1">Done</button></div>`);
   m.el.addEventListener('click', e => {
     const b = e.target.closest('[data-cer]'); if (b) { pref('ceremony', b.dataset.cer); applyCeremony(); m.el.querySelectorAll('[data-cer]').forEach(x => { x.classList.toggle('on', x === b); x.setAttribute('aria-checked', x === b); }); }
-    const t = e.target.closest('[data-th2]'); if (t) { document.documentElement.dataset.theme = t.dataset.th2; pref('theme', t.dataset.th2); m.el.querySelectorAll('[data-th2]').forEach(x => x.classList.toggle('on', x === t)); route(); }
+    if (e.target.closest('[data-set-install]') && INSTALL_EVT) { const ev = INSTALL_EVT; INSTALL_EVT = null; m.el.querySelectorAll('[data-test=set-install]').forEach(x => x.remove()); const h = $('#install-hint'); if (h) h.remove(); ev.prompt(); return; }   // Chrome fires beforeinstallprompt again if the player declines
+    const t = e.target.closest('[data-th2]'); if (t) { document.documentElement.dataset.theme = t.dataset.th2; pref('theme', t.dataset.th2); syncThemeChrome(); m.el.querySelectorAll('[data-th2]').forEach(x => x.classList.toggle('on', x === t)); route(); }
   });
 }
 function ornament(cls) { return `<div class="orn ${cls || ''}" aria-hidden="true"><span></span><svg viewBox="0 0 60 16" width="60" height="16"><path d="M0 8h20M40 8h20M30 1l7 7-7 7-7-7z" stroke="currentColor" fill="none" stroke-width="1.4"/><circle cx="30" cy="8" r="2" fill="currentColor"/></svg><span></span></div>`; }
@@ -2191,7 +2218,7 @@ function syncEntries(c, d) {
   }
 }
 function renderBattle(c) {
-  if (c.complete && !(c.draft && c.draft.editing)) { toast('The campaign is ended.'); return go('#/c/' + c.id + '/finale'); }
+  if (c.complete && !(c.draft && c.draft.editing)) { toast('The campaign is ended.'); return redirect('#/c/' + c.id + '/finale'); }
   const st = E.compute(c);
   if (!c.draft) { c.draft = startDraft(c, st); persist(c); }
   const d = c.draft; if (d.sides && d.sides.some(s => s.players.some(id => !d.entries[id]))) syncEntries(c, d);   // repair drafts with missing entries (e.g. imported)
@@ -2961,7 +2988,7 @@ function renderFinale(c) {
 /* ---------------- PWA: service worker, update prompt, install hint ---------------- */
 let INSTALL_EVT = null;
 const isStandalone = () => (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) || window.navigator.standalone === true;
-const isIOS = () => /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+const isIOS = () => /iPad|iPhone|iPod/.test(navigator.userAgent) || (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1);   // iPadOS reports a Mac UA (touch points tell it apart)
 const isIOSSafari = () => isIOS() && /Safari/.test(navigator.userAgent) && !/CriOS|FxiOS|EdgiOS|OPiOS|GSA\//.test(navigator.userAgent);
 function mountInstallHint() {
   const old = $('#install-hint'); if (old) old.remove();
@@ -2981,6 +3008,8 @@ function mountInstallHint() {
   });
 }
 window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); INSTALL_EVT = e; if (document.body.dataset.page === 'home') mountInstallHint(); });
+// launched or moved into the installed app window: no install prompts there
+if (window.matchMedia) { const mq = window.matchMedia('(display-mode: standalone)'); const off = () => { if (mq.matches) { const h = $('#install-hint'); if (h) h.remove(); } }; if (mq.addEventListener) mq.addEventListener('change', off); }
 window.addEventListener('appinstalled', () => { INSTALL_EVT = null; const h = $('#install-hint'); if (h) h.remove(); toast('Installed. Find The Road to Legend on your home screen.'); });
 window.__showUpdate = reg => showUpdateBar(reg);   // test hook
 function showUpdateBar(reg) {
@@ -3007,7 +3036,7 @@ if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {   // 
 }
 window.addEventListener('hashchange', route);
 window.addEventListener('error', e => { console.error('[app error]', e.message); });
-document.documentElement.dataset.theme = pref('theme') || 'night'; applyCeremony();
+document.documentElement.dataset.theme = pref('theme') || 'night'; syncThemeChrome(); applyCeremony();
 window.VPApp = { sim: { goneLabel, afterChange: (id, extra) => { const c = migrate(Store.get(id)); return afterChange(c, { evs: new Set([...evSigs(c), ...extra]) }, Infinity, 'Test'); }, roundStatus, roundComplete, removeBattle, placeBattle, insertBattle, advanceIfDone, earliestOpenRound, startDraft }, Store, E, route, exportCampaign, validateImport, version: APP_VERSION, runReveals: id => runReveals({ id }), fallbackNoun, plainFill };
 route();
 })();

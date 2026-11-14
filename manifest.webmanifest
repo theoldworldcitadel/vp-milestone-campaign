@@ -38,6 +38,69 @@
    "sizes": "1024x1024",
    "type": "image/png",
    "purpose": "any"
+  },
+  {
+   "src": "icons/app-icon-monochrome-512.png",
+   "sizes": "512x512",
+   "type": "image/png",
+   "purpose": "monochrome"
+  }
+ ],
+ "display_override": [
+  "standalone",
+  "minimal-ui"
+ ],
+ "dir": "ltr",
+ "prefer_related_applications": false,
+ "screenshots": [
+  {
+   "src": "screenshots/narrow-war-table.png",
+   "sizes": "824x1830",
+   "type": "image/png",
+   "form_factor": "narrow",
+   "label": "The War Table: every army's Campaign Meter, milestones and the next threshold"
+  },
+  {
+   "src": "screenshots/narrow-codex.png",
+   "sizes": "824x1830",
+   "type": "image/png",
+   "form_factor": "narrow",
+   "label": "The Codex: thresholds, scenario tables and every faction's milestone track"
+  },
+  {
+   "src": "screenshots/wide-war-table.png",
+   "sizes": "1280x800",
+   "type": "image/png",
+   "form_factor": "wide",
+   "label": "The War Table on a tablet or laptop: Campaign Meters for each army side by side"
+  }
+ ],
+ "shortcuts": [
+  {
+   "name": "New campaign",
+   "short_name": "New campaign",
+   "description": "Start a new VP Milestone campaign",
+   "url": "./#/new",
+   "icons": [
+    {
+     "src": "icons/app-icon-192.png",
+     "sizes": "192x192",
+     "type": "image/png"
+    }
+   ]
+  },
+  {
+   "name": "Codex",
+   "short_name": "Codex",
+   "description": "Thresholds, scenario tables and faction tracks",
+   "url": "./#/codex",
+   "icons": [
+    {
+     "src": "icons/app-icon-192.png",
+     "sizes": "192x192",
+     "type": "image/png"
+    }
+   ]
   }
  ]
 }
