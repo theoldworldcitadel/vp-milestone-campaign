@@ -1725,7 +1725,8 @@ function settingsModal() {
   const m = modal(`<h2 class="m-title">Settings</h2><div class="m-body">
     <div class="set-row"><h4>Ceremony</h4><div class="seg" role="radiogroup">${[['full', 'Full'], ['short', 'Short'], ['off', 'Off']].map(([k, l]) => `<button role="radio" aria-checked="${cur === k}" class="${cur === k ? 'on' : ''}" data-cer="${k}" data-test="cer-${k}">${l}</button>`).join('')}</div>
     <p class="small muted">Full plays the dice, meter and milestone ceremonies. Short is the reduced-motion version (quick fades, useful on tournament days). Off shows every result at once. Every ceremony can also be skipped with a tap.</p></div>
-    ${INSTALL_EVT && !isStandalone() ? `<div class="set-row" data-test="set-install"><h4>App</h4><button class="btn gilt" data-set-install="1" data-test="set-install-btn">${icon('M12 3v12M7 10l5 5 5-5M5 21h14', 20)} Install The Road to Legend</button>
+    ${isSamsung() && !isStandalone() && /^https?:$/.test(location.protocol) ? `<div class="set-row" data-test="set-samsung"><h4>App</h4><p class="small muted">${SAMSUNG_NOTE}</p>${openInChromeBtn()}</div>`
+    : INSTALL_EVT && !isStandalone() ? `<div class="set-row" data-test="set-install"><h4>App</h4><button class="btn gilt" data-set-install="1" data-test="set-install-btn">${icon('M12 3v12M7 10l5 5 5-5M5 21h14', 20)} Install The Road to Legend</button>
     <p class="small muted">Opens full screen from your home screen and works offline at the table.</p></div>` : ''}
     <div class="set-row"><h4>Theme</h4><div class="seg">${[['night', 'Night'], ['day', 'Day (parchment)']].map(([k, l]) => `<button class="${th === k ? 'on' : ''}" data-th2="${k}">${l}</button>`).join('')}</div></div>
     </div><div class="m-actions"><button class="btn gilt" data-close="1">Done</button></div>`);
@@ -2990,9 +2991,26 @@ let INSTALL_EVT = null;
 const isStandalone = () => (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) || window.navigator.standalone === true;
 const isIOS = () => /iPad|iPhone|iPod/.test(navigator.userAgent) || (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1);   // iPadOS reports a Mac UA (touch points tell it apart)
 const isIOSSafari = () => isIOS() && /Safari/.test(navigator.userAgent) && !/CriOS|FxiOS|EdgiOS|OPiOS|GSA\//.test(navigator.userAgent);
+// Samsung Internet mints WebAPKs with an outdated targetSdkVersion, so Play Protect blocks the install ("built for an older version
+// of Android"; SamsungInternet/support#123). There we never offer install; we point to Chrome instead.
+const isSamsung = () => /SamsungBrowser/i.test(navigator.userAgent);
+const chromeIntent = () => `intent://${location.host}${location.pathname}${location.search}#Intent;scheme=https;package=com.android.chrome;S.browser_fallback_url=${encodeURIComponent('https://play.google.com/store/apps/details?id=com.android.chrome')};end`;
+const SAMSUNG_NOTE = "Samsung Internet can't install this app safely right now. Open it in Chrome to install.";
+const openInChromeBtn = () => `<a class="btn gilt" href="${esc(chromeIntent())}" data-test="open-in-chrome">${icon('M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8zM12 8h8.5M8.6 14l-4.2 3.5M15.4 14l-1 6.8', 20)} Open in Chrome</a>`;
 function mountInstallHint() {
   const old = $('#install-hint'); if (old) old.remove();
-  if (isStandalone() || pref('installHint') === 'dismissed' || !/^https?:$/.test(location.protocol)) return;
+  if (isStandalone() || !/^https?:$/.test(location.protocol)) return;
+  if (isSamsung()) {
+    if (pref('samsungHint') === 'dismissed') return;
+    const hero = $('.hero'); if (!hero) return;
+    hero.insertAdjacentHTML('afterend', `<section class="install-hint panel" id="install-hint" data-test="samsung-hint" role="region" aria-label="Install the app"><div class="ih-ico"><img src="icons/app-icon-192.png" alt="" width="56" height="56"></div>
+      <div><b>Install from Chrome</b><p class="small muted" data-test="samsung-note">${SAMSUNG_NOTE}</p></div>
+      <div class="ih-act">${openInChromeBtn()}<button class="btn ghost sm" data-ih-close="1" data-test="samsung-dismiss">Not now</button></div></section>`);
+    const el = $('#install-hint');
+    el.addEventListener('click', e => { if (e.target.closest('[data-ih-close]')) { pref('samsungHint', 'dismissed'); el.remove(); } });
+    return;
+  }
+  if (pref('installHint') === 'dismissed') return;
   let body = '';
   if (INSTALL_EVT) body = `<div><b>Keep the campaign on your home screen</b><p class="small muted">Install The Road to Legend as an app. It opens full screen and works offline at the table.</p></div>
     <div class="ih-act"><button class="btn gilt" data-install="1" data-test="install-btn">${icon('M12 3v12M7 10l5 5 5-5M5 21h14', 20)} Install</button><button class="btn ghost sm" data-ih-close="1" data-test="install-dismiss">Not now</button></div>`;

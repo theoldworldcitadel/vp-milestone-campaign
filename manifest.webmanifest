@@ -51,7 +51,6 @@
   "minimal-ui"
  ],
  "dir": "ltr",
- "prefer_related_applications": false,
  "screenshots": [
   {
    "src": "screenshots/narrow-war-table.png",
