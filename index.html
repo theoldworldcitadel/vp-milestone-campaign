@@ -1064,6 +1064,10 @@ body:has(.reveal) #toast-root,body:has(.theatre) #toast-root{visibility:hidden}
 [data-theme='day'] .tag,[data-theme='day'] .mchip,[data-theme='day'] .pchip,[data-theme='day'] .chip,[data-theme='day'] .notch .nl{color:#3F2E0B}
 [data-theme='day'] .btn.ghost.danger,[data-theme='day'] [data-test^=del-]{color:#7A1414}
 [data-theme='day'] .trow em,[data-theme='day'] .tgroup h4 em{color:#2E200F}
+/* R4: circled W/D/L on the record sheet: darker letter, ring drawn outside the glyph box (outline) so it never thins the letter */
+.sheet .bc .wdl u{color:#560A0A;border:0;outline:1.6px solid #6E1010;outline-offset:1px;padding:0 2px;border-radius:50%;background:rgba(255,250,236,.85);font-weight:800}
+.sheet .bc .wdl{color:#2E2014}
+@media print{.sheet .bc .wdl u{color:#4A0808!important;outline-color:#5E0C0C!important;background:#FFFBEF!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}.sheet .bc .wdl{color:#2A1D12!important}}
 </style>
 </head>
 <body>
@@ -1473,9 +1477,9 @@ function modal(html, opts) {
   const f = wrap.querySelector('.modal'); if (f) { f.setAttribute('tabindex', '-1'); setTimeout(() => { if (!wrap.contains(document.activeElement)) f.focus({ preventScroll: true }); }, 50); }
   return { el: wrap, close };
 }
-function confirmBox(title, body, okLabel) {
+function confirmBox(title, body, okLabel, okClass) {
   return new Promise(res => {
-    const m = modal(`<h2 class="m-title">${title}</h2><div class="m-body">${body}</div><div class="m-actions"><button class="btn ghost" data-a="no">Cancel</button><button class="btn danger" data-a="ok">${okLabel || 'Confirm'}</button></div>`, { onClose: () => res(false) });
+    const m = modal(`<h2 class="m-title">${title}</h2><div class="m-body">${body}</div><div class="m-actions"><button class="btn ghost" data-a="no">Cancel</button><button class="btn ${okClass || 'danger'}" data-a="ok" data-test="confirm-ok">${okLabel || 'Confirm'}</button></div>`, { onClose: () => res(false) });
     m.el.addEventListener('click', e => { const a = e.target.closest('[data-a]'); if (!a) return; res(a.dataset.a === 'ok'); m.close(); });
   });
 }
@@ -1933,10 +1937,17 @@ function draftToCampaign(d) {
 /* ---------------- rounds ---------------- */
 function entryRound(b, pid) { const e = b.entries[pid]; return e && e.round ? e.round : b.round; }
 function scheduledBattle(c, pid, r) { return c.battles.find(b => b.sides.some(s => s.players.includes(pid)) && b.entries[pid] && b.entries[pid].counts !== false && entryRound(b, pid) === r); }
+// R1: a round only waits for the armies that were in the campaign in that round: a late joiner counts from the round they
+// joined, and a retired army only for the rounds before it left (it cannot fight again, so a round it has no battle in is
+// never held up by it).
+const joinedBy = (p, r) => (+p.joinedRound || 1) <= r;
+const activeIn = (c, r) => c.players.filter(p => joinedBy(p, r) && (!p.retired || (p.retiredRound ? r < p.retiredRound : false)));
 function roundStatus(c, r) {
   const missed = c.missed[r] || [];
-  return E.trackedPlayers(c).map(p => ({ id: p.id, battle: scheduledBattle(c, p.id, r), missed: missed.includes(p.id) && !scheduledBattle(c, p.id, r) }));
+  return activeIn(c, r).map(p => { const battle = scheduledBattle(c, p.id, r);
+    return { id: p.id, battle, missed: !battle && (missed.includes(p.id) || !!p.retired) }; });
 }
+function earliestOpenRound(c) { let r = 1; while (r < c.games && roundComplete(c, r)) r++; return r; }
 function roundComplete(c, r) { return roundStatus(c, r).every(s => s.battle || s.missed); }
 function makeupOwed(c) {   // players who missed the previous round and can still make it up this round
   const r = c.round - 1; if (r < 1) return [];
@@ -2222,9 +2233,11 @@ function battlePair(c, st, d) {
       <label class="field"><span>Primary General's player</span><select data-primary="${i}">${d.sides[i].players.map(pid => `<option value="${pid}" ${d.sides[i].primary === pid ? 'selected' : ''}>${esc(playerName(c, pid))}</option>`).join('')}</select></label>` : ''}
     ${d.makeup ? d.sides[i].players.filter(pid => pid !== 'standin').map(pid => { const e = d.entries[pid]; return `<p class="small ${e.counts ? 'ok' : 'muted'}">${esc(playerName(c, pid))}: ${e.counts ? `records this battle (round ${e.round})` : 'does not record this battle (not one of their scheduled battles)'}</p>`; }).join('') : ''}
   </div>`;
+  const refight = c.battles.some(b => b.round > d.round);
   return `<h2 class="h2">Muster for battle</h2>
+  <p class="small ${refight ? 'gilt' : 'muted'}" data-test="muster-round">${refight ? `Fighting round ${d.round} again: this battle is stored in round ${d.round}, before the later rounds.` : `Round ${d.round} of ${c.games}.`}</p>
   <div class="pair-opts">
-    <label class="check"><input type="checkbox" data-opt="makeup" ${d.makeup ? 'checked' : ''} ${owed.length || d.makeup ? '' : 'disabled'}> Make-up battle for round ${c.round - 1} ${owed.length ? '' : '(none owed)'}</label>
+    <label class="check"><input type="checkbox" data-opt="makeup" ${d.makeup ? 'checked' : ''} ${owed.length || d.makeup ? '' : 'disabled'}> ${c.round > 1 ? `Make-up battle for round ${c.round - 1} ${owed.length ? '' : '(none owed)'}` : 'Make-up battle (none owed in round 1)'}</label>
     <label class="check"><input type="checkbox" data-opt="multi" ${d.multi ? 'checked' : ''}> Multi-player battle (sides of several armies)</label>
     ${c.meter === 'vp' ? `<label class="check"><input type="checkbox" data-opt="size" ${d.size ? 'checked' : ''}> Played at a different battle size</label>${d.size !== null ? `<input type="number" class="inline-num" data-size-in="1" min="500" step="50" value="${d.size}" inputmode="numeric"> pts` : ''}` : ''}
   </div>
@@ -2509,12 +2522,12 @@ function saveBattle(c, d) {
   }
   c.draft = null;
   const late = c.battles.length && ordRound(b) < ordRound(c.battles[c.battles.length - 1]);
-  const at = insertBattle(c, b);
+  const at = placeBattle(c, b);
   if (late) {   // a battle for an earlier round: put it in its place, re-check any later pace check, then reveal what is new
-    advanceIfDone(c); persist(c); toast('The record is sealed.'); go('#/c/' + c.id);
+    persist(c); toast('The record is sealed.'); go('#/c/' + c.id);
     setTimeout(() => recheckPace(c, at).then(() => { persist(c); renderTable(c); runReveals(c); }), 350); return;
   }
-  advanceIfDone(c); persist(c);
+  persist(c);
   toast('The record is sealed.');
   go('#/c/' + c.id);
   setTimeout(() => runReveals(c), 350);
@@ -2539,10 +2552,20 @@ async function recheckPace(c, idx) {
     const nf = calc.factor || null, of = pc.factor || null;
     if (nf === of) { pc.ratio = Math.round(calc.ratio * 10000) / 10000; pc.avg = calc.avg; continue; }
     const fx = f => f ? '×' + (+f).toFixed(3) : 'no change (within 5%)';
-    const ok = await confirmBox(`Pace check after round ${pc.afterRound}`, `<p>The battles before this pace check have changed. Worked out again, the group ratio is ${calc.ratio.toFixed(3)}, so the thresholds change from <b>${fx(of)}</b> to <b>${fx(nf)}</b>.</p><p class="small muted">Apply the new factor? If you keep the old one, every later threshold stays as it was.</p>`, 'Apply ' + (nf ? fx(nf) : 'no change'));
+    const ok = await confirmBox(`Pace check after round ${pc.afterRound}`, `<p>The battles before this pace check have changed. Worked out again, the group ratio is ${calc.ratio.toFixed(3)}, so the thresholds change from <b>${fx(of)}</b> to <b>${fx(nf)}</b>.</p><p class="small muted">Apply the new factor? If you keep the old one, every later threshold stays as it was.</p>`, 'Apply ' + (nf ? fx(nf) : 'no change'), 'gilt');
     if (ok) { pc.ratio = Math.round(calc.ratio * 10000) / 10000; pc.avg = calc.avg; pc.factor = nf; pc.recalculated = new Date().toISOString(); toast(`Pace check after round ${pc.afterRound}: ${fx(nf)}.`); }
     else pc.kept = true;
   }
+}
+// R2: display names for a result that no longer happens (signature "type:pid:key[:battle]")
+function goneLabel(c, sig) {
+  const [t, pid, k] = sig.split(':'); const who = esc(playerName(c, pid)); const f = playerFac(c, pid);
+  if (t === 'milestone') return `${who} · Milestone ${LBL(k)} (${f && f.milestones[k] ? fillFor(c, pid, f.milestones[k].name) : esc(k)})`;
+  if (t === 'moment') return `${who} · Chronicle Moment: ${esc((E.momentInfo(k) || {}).name || k)}`;
+  if (t === 'trial') return `${who} · The Trial (${k === 'good' ? 'the triumphant ending' : 'the scarred ending'})`;
+  if (t === 'humbled') return `${who} · A Legend Humbled`;
+  if (t === 'bolwin') return `${who} · Battle of Legends: closing passage`;
+  return `${who} · ${esc(t)}`;
 }
 // F3: after an edit, delete or late insert, show only what changed: new results to reveal, and results that no longer happen.
 async function afterChange(c, before, idx, label) {
@@ -2553,8 +2576,7 @@ async function afterChange(c, before, idx, label) {
   persist(c);
   const fresh = orderEvents(c, st, unseenEvents(c, st));
   if (!gone.length && !fresh.length) { toast(`${label}. Nothing else changed.`); return; }
-  const goneTxt = gone.map(x => { const [t, pid, k] = x.split(':'); const who = esc(playerName(c, pid)); const f = playerFac(c, pid);
-    return t === 'milestone' ? `${who} · Milestone ${LBL(k)} (${fillFor(c, pid, f.milestones[k].name)})` : t === 'moment' ? `${who} · ${esc((E.momentInfo(k) || {}).name || k)}` : t === 'trial' ? `${who} · Trial (${k === 'good' ? 'triumphant' : 'scarred'})` : `${who} · ${esc(t)}`; });
+  const goneTxt = [...new Set(gone.map(x => goneLabel(c, x)))];
   const items = fresh.map(ev => evSummary(c, st, ev));
   await new Promise(res => {
     const m = modal(`<h2 class="m-title">Changes from this edit</h2><div class="m-body" data-test="changes">
@@ -2574,17 +2596,25 @@ function editBattle(c, id) {
   c.draft = d; persist(c); go('#/c/' + c.id + '/battle');
 }
 function cancelEdit(c) { c.draft = c.draftStash || null; delete c.draftStash; persist(c); toast('Edit cancelled. Nothing changed.'); go('#/c/' + c.id + '/chronicle'); }
+// Remove battle i: pace-check positions shift, and the campaign goes back to the round that now lacks a battle (never past
+// the current round, never below round 1), so the battle can be fought again in its own round.
+function removeBattle(c, i) {
+  const gone = c.battles.splice(i, 1)[0];
+  c.paceChecks = c.paceChecks.map(p => p.afterSeq > i ? Object.assign({}, p, { afterSeq: p.afterSeq - 1 }) : p).filter(p => p.afterSeq <= c.battles.length);
+  const wasComplete = c.complete;
+  if (c.complete) { c.complete = false; delete c.completedRound; }
+  const r = Math.max(1, Math.min(c.round, earliestOpenRound(c)));
+  if (wasComplete || r < c.round) c.round = r;
+  advanceIfDone(c);
+  return gone;
+}
+// Store a newly fought battle in its round and move the campaign on (used by Seal the record)
+function placeBattle(c, b) { const at = insertBattle(c, b); advanceIfDone(c); return at; }
 async function deleteBattle(c, id) {
   const i = c.battles.findIndex(x => x.id === id); if (i < 0) return;
   if (!(await confirmBox(`Delete battle ${i + 1}?`, '<p>The battle record is removed and every meter, milestone and moment is recalculated from the battles that remain. You can then fight it again as a make-up.</p>', 'Delete'))) return;
   const before = { evs: evSigs(c) };
-  c.battles.splice(i, 1);
-  c.paceChecks = c.paceChecks.map(p => p.afterSeq > i ? Object.assign({}, p, { afterSeq: p.afterSeq - 1 }) : p).filter(p => p.afterSeq <= c.battles.length);
-  if (c.complete) { c.complete = false; delete c.completedRound; }
-  // go back to the earliest round that is now missing a battle; once it is re-fought the campaign moves on past complete rounds
-  let r = 1; while (r < c.games && roundComplete(c, r)) r++;
-  if (r < c.round) c.round = r;
-  advanceIfDone(c);
+  removeBattle(c, i);
   persist(c); renderChronicle(c);
   await afterChange(c, before, i - 0.5, c.complete ? 'Battle removed' : `Battle removed; round ${c.round} needs a battle again`);
   renderChronicle(migrate(Store.get(c.id)));
@@ -2978,7 +3008,7 @@ if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {   // 
 window.addEventListener('hashchange', route);
 window.addEventListener('error', e => { console.error('[app error]', e.message); });
 document.documentElement.dataset.theme = pref('theme') || 'night'; applyCeremony();
-window.VPApp = { Store, E, route, exportCampaign, validateImport, version: APP_VERSION, runReveals: id => runReveals({ id }), fallbackNoun, plainFill };
+window.VPApp = { sim: { goneLabel, afterChange: (id, extra) => { const c = migrate(Store.get(id)); return afterChange(c, { evs: new Set([...evSigs(c), ...extra]) }, Infinity, 'Test'); }, roundStatus, roundComplete, removeBattle, placeBattle, insertBattle, advanceIfDone, earliestOpenRound, startDraft }, Store, E, route, exportCampaign, validateImport, version: APP_VERSION, runReveals: id => runReveals({ id }), fallbackNoun, plainFill };
 route();
 })();
 </script>
