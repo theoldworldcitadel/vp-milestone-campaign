@@ -1,5 +1,5 @@
 /* The Road to Legend: service worker. Cache name is tied to the build hash, so every build is a new cache. */
-const CACHE = 'rtl-9f122a0e334c';
+const CACHE = 'rtl-9a36589616d7';
 const PRECACHE = ["./", "index.html", "manifest.webmanifest", "icons/app-icon-192.png", "icons/app-icon-512.png", "icons/app-icon-maskable-512.png", "icons/apple-touch-icon-180.png", "icons/favicon.ico", "icons/favicon-32.png", "icons/app-icon-1024.png", "icons/app-icon-monochrome-512.png"];
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(PRECACHE.map(u => new Request(u, { cache: 'reload' })))));
